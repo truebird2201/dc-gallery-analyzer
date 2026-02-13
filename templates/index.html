@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DC갤러리 부정적 게시글 분석기</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #e94560;
+            margin-bottom: 8px;
+            font-size: 28px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 32px;
+            font-size: 14px;
+        }
+
+        /* 입력 폼 */
+        .input-section {
+            background: #16213e;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            border: 1px solid #0f3460;
+        }
+        .form-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .form-row input[type="text"] {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            font-size: 14px;
+            outline: none;
+        }
+        .form-row input[type="text"]:focus {
+            border-color: #e94560;
+        }
+        .form-row select {
+            padding: 12px 16px;
+            border: 1px solid #0f3460;
+            border-radius: 8px;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            font-size: 14px;
+            outline: none;
+            cursor: pointer;
+        }
+        .btn-analyze {
+            width: 100%;
+            padding: 14px;
+            background: #e94560;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn-analyze:hover { background: #c73650; }
+        .btn-analyze:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        /* 로딩 */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        .loading.active { display: block; }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #0f3460;
+            border-top: 4px solid #e94560;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 에러 */
+        .error-msg {
+            background: #3d1525;
+            border: 1px solid #e94560;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+            display: none;
+        }
+        .error-msg.active { display: block; }
+
+        /* 결과 영역 */
+        .results { display: none; }
+        .results.active { display: block; }
+
+        /* 요약 카드 */
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        .card {
+            background: #16213e;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid #0f3460;
+        }
+        .card .value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #e94560;
+        }
+        .card .label {
+            font-size: 13px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        /* 키워드 */
+        .keywords-section {
+            background: #16213e;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 24px;
+            border: 1px solid #0f3460;
+        }
+        .keywords-section h3 {
+            color: #e94560;
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+        .keyword-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .keyword-tag {
+            background: #1a1a2e;
+            border: 1px solid #e94560;
+            color: #e94560;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+        }
+        .keyword-tag .count {
+            background: #e94560;
+            color: #fff;
+            border-radius: 10px;
+            padding: 2px 7px;
+            margin-left: 6px;
+            font-size: 11px;
+        }
+
+        /* 카테고리 바 */
+        .category-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .cat-item {
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        .cat-욕설 { background: #c0392b33; color: #e74c3c; }
+        .cat-비판 { background: #e67e2233; color: #e67e22; }
+        .cat-혐오 { background: #8e44ad33; color: #9b59b6; }
+
+        /* 게시글 목록 */
+        .posts-section h3 {
+            color: #e94560;
+            margin-bottom: 16px;
+            font-size: 16px;
+        }
+        .post-item {
+            background: #16213e;
+            border: 1px solid #0f3460;
+            border-radius: 10px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: border-color 0.2s;
+        }
+        .post-item:hover { border-color: #e94560; }
+        .post-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .post-title {
+            font-weight: bold;
+            font-size: 15px;
+            color: #fff;
+        }
+        .post-title a {
+            color: #fff;
+            text-decoration: none;
+        }
+        .post-title a:hover { color: #e94560; }
+        .post-score {
+            background: #e9456033;
+            color: #e94560;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .post-meta {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        .post-preview {
+            font-size: 13px;
+            color: #aaa;
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+        .post-keywords {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .post-kw {
+            background: #e9456022;
+            color: #e94560;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>DC갤러리 부정적 게시글 분석기</h1>
+        <p class="subtitle">DC인사이드 갤러리 URL을 입력하면 부정적 게시글을 분석합니다</p>
+
+        <div class="input-section">
+            <div class="form-row">
+                <input type="text" id="gallUrl" placeholder="DC갤러리 URL을 입력하세요 (예: https://gall.dcinside.com/board/lists/?id=programming)">
+                <select id="pageCount">
+                    <option value="1">1페이지</option>
+                    <option value="2">2페이지</option>
+                    <option value="3" selected>3페이지</option>
+                    <option value="5">5페이지</option>
+                </select>
+            </div>
+            <button class="btn-analyze" id="btnAnalyze" onclick="startAnalysis()">분석 시작</button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>게시글을 크롤링하고 분석 중입니다...</p>
+            <p style="font-size:12px; color:#666; margin-top:8px;">페이지 수에 따라 시간이 걸릴 수 있습니다</p>
+        </div>
+
+        <div class="error-msg" id="errorMsg"></div>
+
+        <div class="results" id="results">
+            <div class="summary-cards">
+                <div class="card">
+                    <div class="value" id="totalCount">0</div>
+                    <div class="label">전체 게시글</div>
+                </div>
+                <div class="card">
+                    <div class="value" id="negativeCount">0</div>
+                    <div class="label">부정적 게시글</div>
+                </div>
+                <div class="card">
+                    <div class="value" id="negativeRatio">0%</div>
+                    <div class="label">부정 비율</div>
+                </div>
+            </div>
+
+            <div class="keywords-section">
+                <h3>카테고리별 분포</h3>
+                <div class="category-bar" id="categoryBar"></div>
+                <h3 style="margin-top:16px;">주요 부정 키워드</h3>
+                <div class="keyword-tags" id="keywordTags"></div>
+            </div>
+
+            <div class="posts-section">
+                <h3>부정적 게시글 목록</h3>
+                <div id="postList"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function startAnalysis() {
+            const url = document.getElementById('gallUrl').value.trim();
+            const pages = document.getElementById('pageCount').value;
+            const btn = document.getElementById('btnAnalyze');
+
+            if (!url) {
+                showError('URL을 입력해주세요.');
+                return;
+            }
+
+            btn.disabled = true;
+            document.getElementById('loading').classList.add('active');
+            document.getElementById('results').classList.remove('active');
+            document.getElementById('errorMsg').classList.remove('active');
+
+            try {
+                const resp = await fetch('/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url, pages: parseInt(pages) })
+                });
+
+                const data = await resp.json();
+
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                renderResults(data);
+            } catch (e) {
+                showError('서버와 통신 중 오류가 발생했습니다.');
+            } finally {
+                btn.disabled = false;
+                document.getElementById('loading').classList.remove('active');
+            }
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('errorMsg');
+            el.textContent = msg;
+            el.classList.add('active');
+        }
+
+        function renderResults(data) {
+            document.getElementById('totalCount').textContent = data.total;
+            document.getElementById('negativeCount').textContent = data.negative_count;
+            document.getElementById('negativeRatio').textContent = data.negative_ratio + '%';
+
+            // 카테고리 바
+            const catBar = document.getElementById('categoryBar');
+            catBar.innerHTML = '';
+            for (const [cat, cnt] of Object.entries(data.category_summary || {})) {
+                const el = document.createElement('span');
+                el.className = 'cat-item cat-' + cat;
+                el.textContent = cat + ' ' + cnt + '건';
+                catBar.appendChild(el);
+            }
+
+            // 키워드 태그
+            const kwTags = document.getElementById('keywordTags');
+            kwTags.innerHTML = '';
+            for (const kw of (data.top_keywords || [])) {
+                const tag = document.createElement('span');
+                tag.className = 'keyword-tag';
+                tag.innerHTML = kw.keyword + '<span class="count">' + kw.count + '</span>';
+                kwTags.appendChild(tag);
+            }
+
+            // 게시글 목록
+            const postList = document.getElementById('postList');
+            postList.innerHTML = '';
+            if (data.negative_posts.length === 0) {
+                postList.innerHTML = '<p style="color:#888; text-align:center; padding:20px;">부정적 게시글이 감지되지 않았습니다.</p>';
+            }
+            for (const post of data.negative_posts) {
+                const div = document.createElement('div');
+                div.className = 'post-item';
+                const kwHtml = (post.matched_keywords_summary || [])
+                    .map(k => '<span class="post-kw">' + escapeHtml(k) + '</span>')
+                    .join('');
+                div.innerHTML = `
+                    <div class="post-header">
+                        <span class="post-title"><a href="${escapeHtml(post.url)}" target="_blank">${escapeHtml(post.title)}</a></span>
+                        <span class="post-score">부정점수 ${post.negative_score}</span>
+                    </div>
+                    <div class="post-meta">${escapeHtml(post.writer)} · ${escapeHtml(post.date)}</div>
+                    <div class="post-preview">${escapeHtml(post.body_preview || '')}</div>
+                    <div class="post-keywords">${kwHtml}</div>
+                `;
+                postList.appendChild(div);
+            }
+
+            document.getElementById('results').classList.add('active');
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // Enter 키로 분석 시작
+        document.getElementById('gallUrl').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') startAnalysis();
+        });
+    </script>
+</body>
+</html>
